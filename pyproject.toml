@@ -1,0 +1,39 @@
+[tool.briefcase]
+project_name = "ProMed"
+bundle = "com.promed"
+version = "0.1.0"
+display_name = "ProMed Suite"
+author = "Medical Pro"
+author_email = "pro@med.com"
+
+[tool.briefcase.app.promed]
+formal_name = "ProMed"
+description = "Professional Medical Suite"
+icon = "resources/promed"
+sources = ["src/promed"]
+requires = [
+    "PyQt6",
+    "PyQt6-Svg",
+]
+
+[tool.briefcase.app.promed.macOS]
+universal_build = true
+requires = [
+    "std_lib",
+]
+
+[tool.briefcase.app.promed.linux]
+requires = [
+    "std_lib",
+]
+
+[tool.briefcase.app.promed.windows]
+requires = [
+    "std_lib",
+]
+
+[tool.briefcase.app.promed.android]
+build_gradle_dependencies = [
+    "androidx.appcompat:appcompat:1.6.1",
+    "com.google.android.material:material:1.9.0",
+]
