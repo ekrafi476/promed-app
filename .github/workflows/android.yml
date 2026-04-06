@@ -1,24 +1,42 @@
 name: Build Android APK
 on: [push]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.9
-      - name: Install dependencies
+          python-version: '3.10'
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install Briefcase
         run: |
+          python -m pip install --upgrade pip
           pip install briefcase
-      - name: Build APK
+
+      - name: Create Android Objects
         run: |
           briefcase create android --no-input
+
+      - name: Build Android App
+        run: |
           briefcase build android --no-input
+
+      - name: Package APK
+        run: |
           briefcase package android --no-input
+
       - name: Upload APK
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
-          name: promed-apk
+          name: ProMed-App-Package
           path: dist/*.apk
