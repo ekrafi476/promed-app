@@ -1,25 +1,16 @@
-name: Build and Release ProMed
-on: [push]
-
-permissions:
-  contents: write
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build with Buildozer (Docker)
-        run: |
-          docker run --rm -v "$(pwd)":/home/user/hostcwd \
-          kivy/buildozer android debug
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: bin/*.apk
-          tag_name: Beta_v1.0.3_build_${{ github.run_number }}
-          name: ProMed Beta v1.0.3 Build ${{ github.run_number }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+[app]
+title = ProMed Aero
+package.name = promedsuite
+package.domain = com.promed.enterprise
+source.dir = .
+source.include_exts = py,kv,db
+version = 1.0.3
+requirements = python3,kivy==2.3.0,kivymd==1.2.0,sqlite3,pillow
+orientation = portrait
+fullscreen = 0
+android.api = 33
+android.minapi = 21
+android.accept_sdk_license = True
+android.permissions = WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, INTERNET
+android.archs = arm64-v8a
+p4a.branch = master
