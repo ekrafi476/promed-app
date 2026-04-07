@@ -1,5 +1,8 @@
-name: Build Android APK
+name: Build and Release ProMed
 on: [push]
+
+permissions:
+  contents: write  # This allows GitHub to create the release for you
 
 jobs:
   build:
@@ -8,13 +11,20 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build with Buildozer (Docker)
-        # Using a reliable Docker image that has the Android tools pre-configured
         run: |
           docker run --rm -v "$(pwd)":/home/user/hostcwd \
           kivy/buildozer android debug
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: ProMed-App-Package
-          path: bin/*.apk
+          files: bin/*.apk
+          tag_name: v1.0.${{ github.run_number }}
+          name: ProMed App Update ${{ github.run_number }}
+          body: |
+            Direct APK Download link below. 
+            No zip extraction needed.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
