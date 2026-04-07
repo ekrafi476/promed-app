@@ -8,31 +8,30 @@ from kivy.uix.screenmanager import ScreenManager, Screen
 from kivymd.app import MDApp
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDRaisedButton, MDIconButton, MDFlatButton
+from kivymd.uix.button import MDRaisedButton, MDIconButton
 from kivymd.uix.list import TwoLineAvatarIconListItem, IRightBodyTouch, OneLineAvatarIconListItem, MDList
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivy.properties import StringProperty, NumericProperty, BooleanProperty
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
 
-# --- DATABASE ---
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect("med_enterprise_vFinal.db", check_same_thread=False)
+        self.conn = sqlite3.connect("med_enterprise_pro_vFinal.db", check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.cursor.execute('CREATE TABLE IF NOT EXISTS workspaces (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)')
         self.conn.commit()
 
     def init_wp(self, wp_name):
         s = re.sub(r'\W+', '', wp_name)
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS med_{s} (id INTEGER PRIMARY KEY, name TEXT UNIQUE, generic TEXT, company TEXT, price REAL, img TEXT)')
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS med_{s} (id INTEGER PRIMARY KEY, name TEXT UNIQUE, generic TEXT, price REAL)')
         self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_{s} (id INTEGER PRIMARY KEY, name TEXT, is_done INTEGER DEFAULT 0)')
         self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_it_{s} (id INTEGER PRIMARY KEY, gid INTEGER, name TEXT, qty INTEGER, checked INTEGER DEFAULT 0)')
         self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_{s} (id INTEGER PRIMARY KEY, name TEXT)')
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_it_{s} (gid INTEGER, name TEXT, power TEXT, type TEXT)')
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_it_{s} (gid INTEGER, name TEXT, pwr TEXT, type TEXT)')
         self.cursor.execute(f'CREATE TABLE IF NOT EXISTS sales_{s} (items TEXT, total REAL, date TEXT)')
         self.conn.commit()
 
-# --- UI COMPONENTS ---
 class RightCheckbox(IRightBodyTouch, MDCheckbox):
     pass
 
@@ -40,7 +39,6 @@ class CheckItem(OneLineAvatarIconListItem):
     item_id = NumericProperty()
     is_checked = BooleanProperty(False)
 
-# --- MAIN APP ---
 KV = '''
 ScreenManager:
     SplashScreen:
@@ -59,13 +57,6 @@ ScreenManager:
             theme_icon_color: "Custom"
             icon_color: 1, 1, 1, 1
             pos_hint: {"center_x": .5}
-        MDLabel:
-            text: "PROMED ENTERPRISE"
-            halign: "center"
-            theme_text_color: "Custom"
-            text_color: 1, 1, 1, 1
-            font_style: "H5"
-            bold: True
         MDProgressBar:
             id: progress
             value: 0
@@ -79,7 +70,6 @@ ScreenManager:
         orientation: "vertical"
         md_bg_color: 0, 0.47, 0.83, 1
         padding: "20dp"
-        spacing: "20dp"
         MDLabel:
             text: "Setup Workplace"
             font_style: "H4"
@@ -90,7 +80,6 @@ ScreenManager:
             id: wp_in
             hint_text: "Hospital Name"
             mode: "round"
-            fill_color_normal: 1, 1, 1, 1
         MDRaisedButton:
             text: "GET STARTED"
             md_bg_color: 1, 1, 1, 1
@@ -106,30 +95,24 @@ ScreenManager:
             title: app.active_wp
             md_bg_color: 0, 0.47, 0.83, 1
             left_action_items: [["menu", lambda x: nav_drawer.set_state("open")]]
-            right_action_items: [["plus", lambda x: app.open_inventory_dialog()]]
 
         MDBottomNavigation:
             id: b_nav
             MDBottomNavigationItem:
                 name: "note"
-                text: "Notepad"
+                text: "Note"
                 icon: "notebook"
                 MDBoxLayout:
                     orientation: "vertical"
                     padding: "10dp"
                     MDTextField:
-                        id: note_input
-                        hint_text: "Type med name..."
+                        id: note_in
+                        hint_text: "Patient Details"
                         multiline: True
-                        on_text: app.smart_lookup(self.text)
-                    MDCard:
-                        size_hint_y: None
-                        height: "100dp"
-                        radius: 20
-                        padding: "15dp"
-                        MDLabel:
-                            id: insight_lbl
-                            text: "Detection: Waiting..."
+                        on_text: app.smart_look(self.text)
+                    MDLabel:
+                        id: ins_lbl
+                        text: "Intelligence active..."
 
             MDBottomNavigationItem:
                 name: "chk"
@@ -139,17 +122,17 @@ ScreenManager:
                     orientation: "vertical"
                     MDBoxLayout:
                         size_hint_y: None
-                        height: "60dp"
-                        padding: "10dp"
+                        height: "50dp"
+                        padding: "5dp"
                         MDTextField:
                             id: cl_in
                             hint_text: "Group Name"
                         MDIconButton:
-                            icon: "plus-circle"
-                            on_release: app.add_cl_group(cl_in.text)
+                            icon: "plus"
+                            on_release: app.add_cl(cl_in.text)
                     ScrollView:
                         MDList:
-                            id: cl_list
+                            id: cl_container
 
             MDBottomNavigationItem:
                 name: "pos"
@@ -162,23 +145,22 @@ ScreenManager:
                         size_hint_y: None
                         height: "50dp"
                         MDTextField:
-                            id: ps_in
-                            hint_text: "Search Med"
+                            id: ps
+                            hint_text: "Med Name"
                         MDTextField:
-                            id: pq_in
+                            id: pq
                             hint_text: "Qty"
                             size_hint_x: .2
-                            text: "1"
                         MDIconButton:
                             icon: "plus"
-                            on_release: app.pos_add()
+                            on_release: app.pos_manual_add()
                     ScrollView:
                         MDList:
                             id: cart_list
                     MDRaisedButton:
-                        text: "FINALIZE SALE"
+                        text: "FINALIZE"
                         size_hint_x: 1
-                        on_release: app.finalize_sale()
+                        on_release: app.fin_sale()
 
     MDNavigationDrawer:
         id: nav_drawer
@@ -187,25 +169,19 @@ ScreenManager:
             padding: "10dp"
             OneLineAvatarIconListItem:
                 text: "Inventory"
-                on_release: app.switch_tab("inv")
+                on_release: app.show_inv()
                 IconLeftWidget:
-                    icon: "package-variant"
+                    icon: "package"
             OneLineAvatarIconListItem:
-                text: "Clinical Shortlist"
-                on_release: app.switch_tab("short")
+                text: "Shortlist"
+                on_release: app.show_short()
                 IconLeftWidget:
                     icon: "layers"
             OneLineAvatarIconListItem:
-                text: "Sales History"
-                on_release: app.switch_tab("hist")
+                text: "History"
+                on_release: app.show_hist()
                 IconLeftWidget:
                     icon: "history"
-            OneLineAvatarIconListItem:
-                text: "Switch Workplace"
-                on_release: app.show_wp_switcher()
-                IconLeftWidget:
-                    icon: "swap-horizontal"
-            Widget:
 '''
 
 class ProMedApp(MDApp):
@@ -218,13 +194,13 @@ class ProMedApp(MDApp):
         return Builder.load_string(KV)
 
     def on_start(self):
-        Clock.schedule_interval(self.update_splash, 0.02)
+        Clock.schedule_interval(self.update_progress, 0.02)
 
-    def update_splash(self, dt):
+    def update_progress(self, dt):
         pb = self.root.get_screen('splash').ids.progress
         pb.value += 4
         if pb.value >= 100:
-            Clock.unschedule(self.update_splash)
+            Clock.unschedule(self.update_progress)
             self.check_setup()
 
     def check_setup(self):
@@ -244,56 +220,42 @@ class ProMedApp(MDApp):
         self.wp_slug = re.sub(r'\W+', '', name)
         self.db.init_wp(name)
         self.root.current = "main"
-        self.refresh_cl()
 
-    # --- CHECKLIST FEATURE ---
-    def add_cl_group(self, name):
+    def add_cl(self, name):
         if name:
             self.db.cursor.execute(f"INSERT INTO chk_{self.wp_slug} (name) VALUES (?)", (name,))
             self.db.conn.commit()
             self.refresh_cl()
 
     def refresh_cl(self):
-        container = self.root.get_screen('main').ids.cl_list
+        container = self.root.get_screen('main').ids.cl_container
         container.clear_widgets()
         self.db.cursor.execute(f"SELECT * FROM chk_{self.wp_slug} ORDER BY id DESC")
         for row in self.db.cursor.fetchall():
-            gid, name, done = row
-            card = MDCard(orientation='vertical', size_hint_y=None, height="120dp", radius=20, padding=10)
-            if done: card.md_bg_color = (0.9, 0.9, 0.9, 1)
-            
-            box = BoxLayout(orientation='horizontal', size_hint_y=None, height="40dp")
-            box.add_widget(QLabel(text=name.upper(), color=(0,0,0,1), bold=True))
-            
-            btn_tr = MDIconButton(icon="send", on_release=lambda x, i=gid: self.transfer_pos(i))
-            btn_ok = MDIconButton(icon="check-circle", on_release=lambda x, i=gid: self.mark_cl_done(i))
-            
-            box.add_widget(btn_tr); box.add_widget(btn_ok)
-            card.add_widget(box)
+            card = MDCard(size_hint_y=None, height="100dp", radius=15, padding=10)
+            card.add_widget(Label(text=row[1], color=(0,0,0,1)))
             container.add_widget(card)
 
-    def mark_cl_done(self, gid):
-        self.db.cursor.execute(f"UPDATE chk_{self.wp_slug} SET done=1 WHERE id=?", (gid,))
-        self.db.conn.commit()
-        self.refresh_cl()
+    def pos_manual_add(self):
+        name = self.root.get_screen('main').ids.ps.text
+        qty = self.root.get_screen('main').ids.pq.text
+        self.root.get_screen('main').ids.cart_list.add_widget(
+            TwoLineAvatarIconListItem(text=name, secondary_text=f"Qty: {qty}")
+        )
 
-    def transfer_pos(self, gid):
-        # Implementation logic for POS transfer with price check
-        self.root.get_screen('main').ids.b_nav.switch_tab("pos")
+    def fin_sale(self):
+        MDDialog(title="Success", text="Payment Saved").open()
 
-    def pos_add(self):
-        # POS add with Math
-        pass
-
-    def finalize_sale(self):
-        MDDialog(title="Success", text="Record Saved").open()
-
-    def smart_lookup(self, text):
+    def smart_look(self, text):
         words = text.split()
         if words:
-            self.db.cursor.execute(f"SELECT * FROM med_{self.active_wp} WHERE name LIKE ?", (f"{words[-1]}%",))
-            res = self.db.cursor.fetchone()
-            if res: self.root.get_screen('main').ids.insight_lbl.text = f"{res[1]} - ৳{res[4]}"
+            self.db.cursor.execute(f"SELECT * FROM med_{self.wp_slug} WHERE name LIKE ?", (f"{words[-1]}%",))
+            r = self.db.cursor.fetchone()
+            if r: self.root.get_screen('main').ids.ins_lbl.text = f"{r[1]} - ৳{r[3]}"
+
+    def show_inv(self): MDDialog(title="Inventory", text="Manage Stock").open()
+    def show_short(self): MDDialog(title="Clinical", text="Shortlists").open()
+    def show_hist(self): MDDialog(title="Logs", text="History").open()
 
 if __name__ == '__main__':
     ProMedApp().run()
