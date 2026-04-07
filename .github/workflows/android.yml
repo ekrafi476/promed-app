@@ -8,13 +8,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build with Buildozer
-        uses: ArtemSerebrennikov/buildozer-action@v1
+        uses: FarasAtif/buildozer-action@v2
         with:
-          buildozer_version: master
           workdir: .
+          buildozer_version: master
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ProMed-Installable-APK
+          name: ProMed-Mobile-Package
           path: bin/*.apk
