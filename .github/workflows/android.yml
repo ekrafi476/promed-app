@@ -1,40 +1,20 @@
-name: Build ProMed APK
+name: Build Android APK
 on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Build with Buildozer (Docker)
+        # Using a reliable Docker image that has the Android tools pre-configured
         run: |
-          sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
-          pip3 install --user --upgrade Cython==0.29.33 buildozer
-
-      - name: Force Accept Android Licenses
-        run: |
-          mkdir -p ~/.android
-          touch ~/.android/repositories.cfg
-          # Manually installing stable build tools to avoid the version 37 error
-          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          # Pre-accepting licenses
-          yes | buildozer android status || true
-          if [ -d "$ANDROID_SDK_ROOT/tools/bin" ]; then
-            yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager --licenses
-          fi
-
-      - name: Build APK
-        run: |
-          export PATH=$PATH:~/.local/bin
-          buildozer android debug
-        env:
-          ACCEPT_SDK_LICENSE: "y"
+          docker run --rm -v "$(pwd)":/home/user/hostcwd \
+          kivy/buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ProMed-Final-App
+          name: ProMed-App-Package
           path: bin/*.apk
