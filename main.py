@@ -2,33 +2,55 @@ import os
 import sqlite3
 import re
 from datetime import datetime
-
-# Standard Kivy imports
 from kivy.lang import Builder
 from kivy.clock import Clock
-from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
 from kivy.properties import StringProperty, BooleanProperty, NumericProperty
+from kivy.core.window import Window
 
-# KivyMD imports
 from kivymd.app import MDApp
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDRaisedButton, MDIconButton
-from kivymd.uix.list import OneLineAvatarIconListItem, IRightBodyTouch, MDList
+from kivymd.uix.button import MDRaisedButton, MDIconButton, MDFlatButton
+from kivymd.uix.list import TwoLineAvatarIconListItem, OneLineAvatarIconListItem, MDList, IRightBodyTouch
 from kivymd.uix.selectioncontrol import MDCheckbox
-from kivy.uix.label import Label
+from kivymd.uix.textfield import MDTextField
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
 
-# --- UI DESIGN (KV) ---
+# --- DATABASE ENGINE (v1.0.3 Workspace Isolation) ---
+class Database:
+    def __init__(self, db_path):
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.cursor = self.conn.cursor()
+        self.cursor.execute('CREATE TABLE IF NOT EXISTS workspaces (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)')
+        self.conn.commit()
+
+    def get_slug(self, name):
+        return re.sub(r'\W+', '', name.lower())
+
+    def init_wp(self, wp_name):
+        s = self.get_slug(wp_name)
+        # 1. Inventory Table (Full Profile)
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS meds_{s} (id INTEGER PRIMARY KEY, name TEXT UNIQUE, gen TEXT, co TEXT, cat TEXT, price REAL, img TEXT)')
+        # 2. Checklist Tables
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_{s} (id INTEGER PRIMARY KEY, name TEXT, is_done INTEGER DEFAULT 0)')
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_it_{s} (id INTEGER PRIMARY KEY, gid INTEGER, name TEXT, qty INTEGER, is_checked INTEGER DEFAULT 0)')
+        # 3. Clinical Shortlist Tables
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_{s} (id INTEGER PRIMARY KEY, name TEXT)')
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_it_{s} (id INTEGER PRIMARY KEY, gid INTEGER, name TEXT, pwr TEXT, type TEXT)')
+        # 4. Sales History
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS sales_{s} (id INTEGER PRIMARY KEY, items TEXT, total REAL, date TEXT)')
+        self.conn.commit()
+
+# --- UI DESIGN (Aero Smooth Theme) ---
 KV = '''
-<CheckItem>:
-    on_size: self.ids._right_container.width = checkbox.width
+<CheckItemListItem>:
     IconLeftWidget:
         icon: "pill"
     RightCheckbox:
-        id: checkbox
-        active: root.is_checked
-        on_active: app.toggle_check(root.item_id, self.active)
+        active: root.checked
+        on_active: app.toggle_item_check(root.item_id, self.active)
 
 ScreenManager:
     SplashScreen:
@@ -48,7 +70,7 @@ ScreenManager:
             icon_color: 1, 1, 1, 1
             pos_hint: {"center_x": .5}
         MDLabel:
-            text: "PROMED ENTERPRISE"
+            text: "PROMED v1.0.3"
             halign: "center"
             theme_text_color: "Custom"
             text_color: 1, 1, 1, 1
@@ -58,7 +80,7 @@ ScreenManager:
             id: progress
             value: 0
             size_hint_x: .6
-            pos_hint: {"center_x": .5}
+            pos_hint: {"center_x": .5, "center_y": .3}
             color: 1, 1, 1, 1
 
 <OnboardScreen>:
@@ -66,53 +88,66 @@ ScreenManager:
     MDBoxLayout:
         orientation: "vertical"
         md_bg_color: 0, 0.47, 0.83, 1
-        padding: "25dp"
+        padding: "40dp"
         spacing: "20dp"
         MDLabel:
-            text: "Setup Workplace"
+            text: "Medical Setup"
             font_style: "H4"
             halign: "center"
-            text_color: 1, 1, 1, 1
             theme_text_color: "Custom"
+            text_color: 1, 1, 1, 1
+            bold: True
         MDTextField:
-            id: wp_in
-            hint_text: "Hospital Name"
+            id: wp_name
+            hint_text: "Hospital or Clinic Name"
             mode: "round"
             fill_color_normal: 1, 1, 1, 1
         MDRaisedButton:
-            text: "GET STARTED"
+            text: "INITIALIZE WORKSPACE"
             md_bg_color: 1, 1, 1, 1
             text_color: 0, 0.47, 0.83, 1
             size_hint_x: 1
-            on_release: app.create_wp(wp_in.text)
+            on_release: app.create_workspace(wp_name.text)
 
 <MainScreen>:
     name: "main"
     MDBoxLayout:
         orientation: "vertical"
+        md_bg_color: 0.95, 0.96, 0.98, 1
+
         MDTopAppBar:
             title: app.active_wp_display
+            elevation: 2
             md_bg_color: 0, 0.47, 0.83, 1
             left_action_items: [["menu", lambda x: nav_drawer.set_state("open")]]
-            right_action_items: [["plus-box", lambda x: app.show_dialog("Inventory")]]
+            right_action_items: [["swap-horizontal", lambda x: app.show_wp_dialog()]]
 
         MDBottomNavigation:
-            id: b_nav
+            id: bottom_nav
+            panel_color: 1, 1, 1, 1
+
             MDBottomNavigationItem:
                 name: "note"
                 text: "Notepad"
-                icon: "notebook"
+                icon: "notebook-edit"
                 MDBoxLayout:
                     orientation: "vertical"
-                    padding: "10dp"
+                    padding: "15dp"
                     MDTextField:
-                        id: note_input
+                        id: clin_note
                         hint_text: "Clinical Notes..."
                         multiline: True
-                    MDLabel:
-                        text: "Smart Aero Engine Active"
-                        theme_text_color: "Secondary"
-                        font_style: "Caption"
+                        on_text: app.detect_med(self.text)
+                    MDCard:
+                        size_hint_y: None
+                        height: "110dp"
+                        radius: 25
+                        padding: "15dp"
+                        elevation: 1
+                        MDLabel:
+                            id: insight_lbl
+                            text: "Smart Insight Active"
+                            font_style: "Caption"
 
             MDBottomNavigationItem:
                 name: "chk"
@@ -125,162 +160,261 @@ ScreenManager:
                         height: "60dp"
                         padding: "10dp"
                         MDTextField:
-                            id: cl_in
-                            hint_text: "New Group Name"
+                            id: cl_name
+                            hint_text: "New Group"
                         MDIconButton:
-                            icon: "plus"
-                            on_release: app.add_cl_group(cl_in.text)
+                            icon: "plus-circle"
+                            on_release: app.add_cl_group(cl_name.text)
                     ScrollView:
                         MDList:
-                            id: cl_list
+                            id: cl_container
 
             MDBottomNavigationItem:
                 name: "pos"
                 text: "POS"
-                icon: "cart"
+                icon: "calculator"
                 MDBoxLayout:
                     orientation: "vertical"
                     padding: "10dp"
                     MDBoxLayout:
                         size_hint_y: None
                         height: "50dp"
+                        spacing: "5dp"
                         MDTextField:
-                            id: ps_search
-                            hint_text: "Med Name"
+                            id: pos_search
+                            hint_text: "Search med..."
                         MDTextField:
-                            id: ps_qty
+                            id: pos_qty
                             hint_text: "Qty"
                             size_hint_x: .2
                             text: "1"
+                        MDIconButton:
+                            icon: "plus-box"
+                            on_release: app.pos_add_item()
                     ScrollView:
                         MDList:
-                            id: cart_list
+                            id: pos_cart
                     MDRaisedButton:
-                        text: "FINALIZE SALE"
+                        text: "FINALIZE & COLLECT"
                         size_hint_x: 1
                         on_release: app.finalize_sale()
 
     MDNavigationDrawer:
         id: nav_drawer
-        radius: (0, 16, 16, 0)
+        radius: (0, 25, 25, 0)
         MDBoxLayout:
             orientation: "vertical"
-            padding: "10dp"
+            padding: "15dp"
             spacing: "10dp"
             MDLabel:
-                text: "Menu"
-                font_style: "H6"
-                size_hint_y: None
-                height: "50dp"
+                text: "Suite Explorer"
+                font_style: "Button"
             OneLineAvatarIconListItem:
-                text: "Clinical Shortlists"
-                on_release: app.show_dialog("Shortlists")
+                text: "Inventory"
+                on_release: app.nav_to("inventory")
+                IconLeftWidget:
+                    icon: "package-variant-closed"
+            OneLineAvatarIconListItem:
+                text: "Shortlists"
+                on_release: app.nav_to("shortlist")
                 IconLeftWidget:
                     icon: "layers"
             OneLineAvatarIconListItem:
                 text: "Sales History"
-                on_release: app.show_dialog("History")
+                on_release: app.nav_to("history")
                 IconLeftWidget:
                     icon: "history"
             Widget:
 
+# --- SUB SCREENS ---
+<InventoryScreen>:
+    name: "inventory"
+    MDBoxLayout:
+        orientation: "vertical"
+        MDTopAppBar:
+            title: "Inventory"
+            left_action_items: [["arrow-left", lambda x: app.back_home()]]
+        MDRaisedButton:
+            text: "ADD PRODUCT"
+            size_hint_x: 1
+            on_release: app.open_inv_dialog()
+        ScrollView:
+            MDList:
+                id: inv_list
+
+<ShortlistScreen>:
+    name: "shortlist"
+    MDBoxLayout:
+        orientation: "vertical"
+        MDTopAppBar:
+            title: "Clinical Shortlists"
+            left_action_items: [["arrow-left", lambda x: app.back_home()]]
+        MDBoxLayout:
+            size_hint_y: None
+            height: "60dp"
+            padding: "10dp"
+            MDTextField:
+                id: sl_name
+                hint_text: "Group Name"
+            MDIconButton:
+                icon: "plus"
+                on_release: app.add_sl_group(sl_name.text)
+        ScrollView:
+            MDList:
+                id: sl_list
+
+<HistoryScreen>:
+    name: "history"
+    MDBoxLayout:
+        orientation: "vertical"
+        MDTopAppBar:
+            title: "History Logs"
+            left_action_items: [["arrow-left", lambda x: app.back_home()]]
+        ScrollView:
+            MDList:
+                id: hist_list
 '''
 
-class RightCheckbox(IRightBodyTouch, MDCheckbox):
-    pass
-
-class CheckItem(OneLineAvatarIconListItem):
+class RightCheckbox(IRightBodyTouch, MDCheckbox): pass
+class CheckItemListItem(OneLineAvatarIconListItem):
     item_id = NumericProperty()
-    is_checked = BooleanProperty(False)
+    checked = BooleanProperty(False)
 
-class SplashScreen(Screen):
-    pass
-
-class OnboardScreen(Screen):
-    pass
-
-class MainScreen(Screen):
-    pass
+class InventoryScreen(Screen): pass
+class ShortlistScreen(Screen): pass
+class HistoryScreen(Screen): pass
 
 class ProMedApp(MDApp):
     active_wp_display = StringProperty("ProMed")
-    active_wp_slug = StringProperty("")
+    wp_slug = ""
 
     def build(self):
         self.theme_cls.primary_palette = "Blue"
-        # Database path is set in on_start to ensure it's writeable
-        return Builder.load_string(KV)
+        self.theme_cls.material_style = "M3"
+        self.sm = ScreenManager(transition=SlideTransition())
+        self.sm.add_widget(Builder.load_string(KV))
+        self.sm.add_widget(InventoryScreen())
+        self.sm.add_widget(ShortlistScreen())
+        self.sm.add_widget(HistoryScreen())
+        return self.sm
 
     def on_start(self):
-        # standard Kivy data directory (Safe for Android)
-        db_file = os.path.join(self.user_data_dir, "promed_v5.db")
-        self.conn = sqlite3.connect(db_file, check_same_thread=False)
-        self.cursor = self.conn.cursor()
-        self.cursor.execute('CREATE TABLE IF NOT EXISTS workspaces (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)')
-        self.conn.commit()
-        
-        # Start Splash Loading
-        Clock.schedule_interval(self.update_splash, 0.02)
+        db_path = os.path.join(self.user_data_dir, "promed_beta_v103.db")
+        self.db = Database(db_path)
+        Clock.schedule_interval(self.update_splash, 0.03)
 
     def update_splash(self, dt):
-        pb = self.root.get_screen('splash').ids.progress
-        pb.value += 4
+        pb = self.sm.get_screen('splash').ids.progress
+        pb.value += 5
         if pb.value >= 100:
             Clock.unschedule(self.update_splash)
             self.check_setup()
 
     def check_setup(self):
-        self.cursor.execute("SELECT name FROM workspaces")
-        res = self.cursor.fetchone()
-        if not res:
-            self.root.current = "onboard"
-        else:
-            self.load_wp(res[0])
-            self.root.current = "main"
+        self.db.cursor.execute("SELECT name FROM workspaces")
+        res = self.db.cursor.fetchone()
+        if not res: self.sm.current = "onboard"
+        else: self.load_workspace(res[0])
 
-    def create_wp(self, name):
+    def create_workspace(self, name):
         if name:
-            try:
-                self.cursor.execute("INSERT INTO workspaces (name) VALUES (?)", (name,))
-                self.conn.commit()
-                self.load_wp(name)
-                self.root.current = "main"
-            except:
-                pass
+            self.db.cursor.execute("INSERT INTO workspaces (name) VALUES (?)", (name,))
+            self.db.conn.commit()
+            self.load_workspace(name)
 
-    def load_wp(self, name):
+    def load_workspace(self, name):
         self.active_wp_display = name
-        self.active_wp_slug = re.sub(r'\W+', '', name)
-        # Create Workplace specific tables
-        s = self.active_wp_slug
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS med_{s} (id INTEGER PRIMARY KEY, name TEXT UNIQUE, price REAL)')
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_{s} (id INTEGER PRIMARY KEY, name TEXT, done INTEGER DEFAULT 0)')
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS sales_{s} (items TEXT, total REAL, date TEXT)')
-        self.conn.commit()
-        self.refresh_checklists()
+        self.wp_slug = self.db.get_slug(name)
+        self.db.init_wp_tables(name)
+        self.sm.current = "main"
+        self.refresh_all()
 
+    def refresh_all(self):
+        self.refresh_cl()
+        self.refresh_inv()
+        self.refresh_hist()
+
+    # --- INVENTORY LOGIC ---
+    def open_inv_dialog(self):
+        self.dialog = MDDialog(
+            title="Register Product", type="custom",
+            content_cls=MDBoxLayout(orientation="vertical", spacing="12dp", adaptive_height=True),
+            buttons=[MDRaisedButton(text="SAVE", on_release=self.save_inv)]
+        )
+        self.dialog.content_cls.add_widget(MDTextField(hint_text="Med Name", id="n"))
+        self.dialog.content_cls.add_widget(MDTextField(hint_text="Generic", id="g"))
+        self.dialog.content_cls.add_widget(MDTextField(hint_text="Price", id="p"))
+        self.dialog.open()
+
+    def save_inv(self, *args):
+        inputs = self.dialog.content_cls.children
+        name, gen, price = inputs[2].text, inputs[1].text, inputs[0].text
+        if name and price:
+            self.db.cursor.execute(f"INSERT INTO meds_{self.wp_slug} (name, generic, price) VALUES (?,?,?)", (name, gen, float(price)))
+            self.db.conn.commit(); self.refresh_inv(); self.dialog.dismiss()
+
+    def refresh_inv(self):
+        lst = self.sm.get_screen('inventory').ids.inv_list; lst.clear_widgets()
+        self.db.cursor.execute(f"SELECT * FROM meds_{self.wp_slug}")
+        for r in self.db.cursor.fetchall():
+            lst.add_widget(TwoLineAvatarIconListItem(text=r[1], secondary_text=f"৳{r[4]}"))
+
+    # --- CHECKLIST LOGIC ---
     def add_cl_group(self, name):
         if name:
-            self.cursor.execute(f"INSERT INTO chk_{self.active_wp_slug} (name) VALUES (?)", (name,))
-            self.conn.commit()
-            self.refresh_checklists()
+            self.db.cursor.execute(f"INSERT INTO chk_{self.wp_slug} (name) VALUES (?)", (name,))
+            self.db.conn.commit(); self.refresh_cl()
 
-    def refresh_checklists(self):
-        container = self.root.get_screen('main').ids.cl_list
-        container.clear_widgets()
-        self.cursor.execute(f"SELECT * FROM chk_{self.active_wp_slug} ORDER BY id DESC")
-        for row in self.cursor.fetchall():
-            # Compact Card Design
-            card = MDCard(size_hint_y=None, height="70dp", radius=15, padding=10, ripple_behavior=True)
-            if row[2]: card.md_bg_color = (0.9, 0.9, 0.9, 1) # Darken if done
-            card.add_widget(MDLabel(text=row[1].upper(), bold=True))
-            container.add_widget(card)
+    def refresh_cl(self):
+        cont = self.sm.get_screen('main').ids.cl_container; cont.clear_widgets()
+        self.db.cursor.execute(f"SELECT * FROM chk_{self.wp_slug} ORDER BY id DESC")
+        for gid, name, done in self.db.cursor.fetchall():
+            card = MDCard(orientation='vertical', size_hint_y=None, height="140dp", radius=25, padding=15)
+            if done: card.md_bg_color = (0.85, 0.85, 0.85, 1)
+            h = BoxLayout(orientation='horizontal')
+            h.add_widget(MDLabel(text=name.upper(), bold=True))
+            h.add_widget(MDIconButton(icon="send", on_release=lambda x, i=gid: self.transfer_pos(i)))
+            h.add_widget(MDIconButton(icon="check-decagram", on_release=lambda x, i=gid: self.mark_done(i)))
+            card.add_widget(h)
+            
+            self.db.cursor.execute(f"SELECT name, qty FROM chk_it_{self.wp_slug} WHERE gid=?", (gid,))
+            for n, q in self.db.cursor.fetchall():
+                card.add_widget(MDLabel(text=f"• {n} x{q}", font_style="Caption"))
+            cont.add_widget(card)
+
+    def mark_done(self, gid):
+        self.db.cursor.execute(f"UPDATE chk_{self.wp_slug} SET is_done=1 WHERE id=?", (gid,))
+        self.db.conn.commit(); self.refresh_cl()
+
+    # --- POS MATH ---
+    def pos_add_item(self):
+        name = self.sm.get_screen('main').ids.pos_search.text
+        qty = int(self.sm.get_screen('main').ids.pos_qty.text or 1)
+        self.db.cursor.execute(f"SELECT price FROM meds_{self.wp_slug} WHERE name=?", (name,))
+        res = self.db.cursor.fetchone()
+        if res:
+            price = res[0]
+            self.sm.get_screen('main').ids.pos_cart.add_widget(
+                TwoLineAvatarIconListItem(text=f"{name} x{qty}", secondary_text=f"Total: ৳{price * qty}")
+            )
+        else: MDDialog(text="Medicine not in Inventory!").open()
 
     def finalize_sale(self):
-        MDDialog(title="Success", text="Sale Recorded").open()
+        MDDialog(title="Payment", text="Sale Recorded!").open()
 
-    def show_dialog(self, title):
-        MDDialog(title=title, text=f"{title} module is ready.").open()
+    def detect_med(self, text):
+        w = text.split()
+        if w:
+            self.db.cursor.execute(f"SELECT * FROM meds_{self.wp_slug} WHERE name LIKE ?", (f"{w[-1]}%",))
+            r = self.db.cursor.fetchone()
+            if r: self.sm.get_screen('main').ids.insight_lbl.text = f"{r[1]} | ৳{r[4]}"
+
+    def nav_to(self, scr): self.sm.current = scr; self.sm.get_screen('main').ids.nav_drawer.set_state("close")
+    def back_home(self): self.sm.current = "main"
+    def refresh_hist(self): pass
+    def add_sl_group(self, name): pass
+    def refresh_shortlists(self): pass
+    def show_wp_dialog(self): pass
 
 if __name__ == '__main__':
     ProMedApp().run()
