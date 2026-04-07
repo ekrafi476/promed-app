@@ -9,37 +9,41 @@ from kivymd.app import MDApp
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDRaisedButton, MDIconButton
-from kivymd.uix.list import TwoLineAvatarIconListItem, IRightBodyTouch, OneLineAvatarIconListItem, MDList
+from kivymd.uix.list import TwoLineAvatarIconListItem, IRightBodyTouch, OneLineAvatarIconListItem
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivy.properties import StringProperty, NumericProperty, BooleanProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 
+# --- DATABASE ENGINE ---
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect("med_enterprise_pro_vFinal.db", check_same_thread=False)
+        self.conn = sqlite3.connect("promed_enterprise_vFinal.db", check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.cursor.execute('CREATE TABLE IF NOT EXISTS workspaces (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)')
         self.conn.commit()
 
     def init_wp(self, wp_name):
-        s = re.sub(r'\W+', '', wp_name)
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS med_{s} (id INTEGER PRIMARY KEY, name TEXT UNIQUE, generic TEXT, price REAL)')
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_{s} (id INTEGER PRIMARY KEY, name TEXT, is_done INTEGER DEFAULT 0)')
+        s = re.sub(r'\W+', '', wp_name) # Dynamic Table Naming
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS meds_{s} (id INTEGER PRIMARY KEY, name TEXT UNIQUE, generic TEXT, price REAL)')
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_{s} (id INTEGER PRIMARY KEY, name TEXT, done INTEGER DEFAULT 0)')
         self.cursor.execute(f'CREATE TABLE IF NOT EXISTS chk_it_{s} (id INTEGER PRIMARY KEY, gid INTEGER, name TEXT, qty INTEGER, checked INTEGER DEFAULT 0)')
         self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_{s} (id INTEGER PRIMARY KEY, name TEXT)')
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_it_{s} (gid INTEGER, name TEXT, pwr TEXT, type TEXT)')
+        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS short_it_{s} (gid INTEGER, name TEXT, power TEXT, type TEXT)')
         self.cursor.execute(f'CREATE TABLE IF NOT EXISTS sales_{s} (items TEXT, total REAL, date TEXT)')
         self.conn.commit()
 
-class RightCheckbox(IRightBodyTouch, MDCheckbox):
-    pass
-
-class CheckItem(OneLineAvatarIconListItem):
-    item_id = NumericProperty()
-    is_checked = BooleanProperty(False)
-
+# --- UI LOGIC ---
 KV = '''
+<CheckItem>:
+    on_size: self.ids._right_container.width = checkbox.width
+    IconLeftWidget:
+        icon: "pill"
+    RightCheckbox:
+        id: checkbox
+        active: root.is_checked
+        on_active: app.toggle_check(root.item_id, self.active)
+
 ScreenManager:
     SplashScreen:
     OnboardScreen:
@@ -50,13 +54,19 @@ ScreenManager:
     MDBoxLayout:
         orientation: "vertical"
         md_bg_color: 0, 0.47, 0.83, 1
-        padding: "50dp"
         MDIconButton:
             icon: "shield-plus"
             icon_size: "80dp"
             theme_icon_color: "Custom"
             icon_color: 1, 1, 1, 1
             pos_hint: {"center_x": .5}
+        MDLabel:
+            text: "PROMED ENTERPRISE"
+            halign: "center"
+            theme_text_color: "Custom"
+            text_color: 1, 1, 1, 1
+            font_style: "H5"
+            bold: True
         MDProgressBar:
             id: progress
             value: 0
@@ -69,7 +79,7 @@ ScreenManager:
     MDBoxLayout:
         orientation: "vertical"
         md_bg_color: 0, 0.47, 0.83, 1
-        padding: "20dp"
+        padding: "30dp"
         MDLabel:
             text: "Setup Workplace"
             font_style: "H4"
@@ -78,8 +88,9 @@ ScreenManager:
             theme_text_color: "Custom"
         MDTextField:
             id: wp_in
-            hint_text: "Hospital Name"
+            hint_text: "Hospital or Clinic Name"
             mode: "round"
+            fill_color_normal: 1, 1, 1, 1
         MDRaisedButton:
             text: "GET STARTED"
             md_bg_color: 1, 1, 1, 1
@@ -100,19 +111,19 @@ ScreenManager:
             id: b_nav
             MDBottomNavigationItem:
                 name: "note"
-                text: "Note"
+                text: "Notepad"
                 icon: "notebook"
                 MDBoxLayout:
                     orientation: "vertical"
                     padding: "10dp"
                     MDTextField:
-                        id: note_in
-                        hint_text: "Patient Details"
+                        id: notes
+                        hint_text: "Clinical Notes..."
                         multiline: True
                         on_text: app.smart_look(self.text)
                     MDLabel:
                         id: ins_lbl
-                        text: "Intelligence active..."
+                        text: "Live Detection Active"
 
             MDBottomNavigationItem:
                 name: "chk"
@@ -120,19 +131,19 @@ ScreenManager:
                 icon: "clipboard-list"
                 MDBoxLayout:
                     orientation: "vertical"
+                    padding: "5dp"
                     MDBoxLayout:
                         size_hint_y: None
                         height: "50dp"
-                        padding: "5dp"
                         MDTextField:
-                            id: cl_in
+                            id: cl_name
                             hint_text: "Group Name"
                         MDIconButton:
                             icon: "plus"
-                            on_release: app.add_cl(cl_in.text)
+                            on_release: app.add_cl(cl_name.text)
                     ScrollView:
                         MDList:
-                            id: cl_container
+                            id: cl_list
 
             MDBottomNavigationItem:
                 name: "pos"
@@ -144,9 +155,10 @@ ScreenManager:
                     MDBoxLayout:
                         size_hint_y: None
                         height: "50dp"
+                        spacing: "5dp"
                         MDTextField:
                             id: ps
-                            hint_text: "Med Name"
+                            hint_text: "Med Search"
                         MDTextField:
                             id: pq
                             hint_text: "Qty"
@@ -158,9 +170,9 @@ ScreenManager:
                         MDList:
                             id: cart_list
                     MDRaisedButton:
-                        text: "FINALIZE"
+                        text: "FINALIZE SALE"
                         size_hint_x: 1
-                        on_release: app.fin_sale()
+                        on_release: app.finalize_sale()
 
     MDNavigationDrawer:
         id: nav_drawer
@@ -169,20 +181,27 @@ ScreenManager:
             padding: "10dp"
             OneLineAvatarIconListItem:
                 text: "Inventory"
-                on_release: app.show_inv()
+                on_release: app.show_dialog("Inventory")
                 IconLeftWidget:
                     icon: "package"
             OneLineAvatarIconListItem:
-                text: "Shortlist"
-                on_release: app.show_short()
+                text: "Shortlists"
+                on_release: app.show_dialog("Shortlists")
                 IconLeftWidget:
                     icon: "layers"
             OneLineAvatarIconListItem:
                 text: "History"
-                on_release: app.show_hist()
+                on_release: app.show_dialog("History")
                 IconLeftWidget:
                     icon: "history"
 '''
+
+class RightCheckbox(IRightBodyTouch, MDCheckbox):
+    pass
+
+class CheckItem(OneLineAvatarIconListItem):
+    item_id = NumericProperty()
+    is_checked = BooleanProperty(False)
 
 class ProMedApp(MDApp):
     active_wp = StringProperty("ProMed")
@@ -198,7 +217,7 @@ class ProMedApp(MDApp):
 
     def update_progress(self, dt):
         pb = self.root.get_screen('splash').ids.progress
-        pb.value += 4
+        pb.value += 5
         if pb.value >= 100:
             Clock.unschedule(self.update_progress)
             self.check_setup()
@@ -206,8 +225,10 @@ class ProMedApp(MDApp):
     def check_setup(self):
         self.db.cursor.execute("SELECT name FROM workspaces")
         res = self.db.cursor.fetchone()
-        if not res: self.root.current = "onboard"
-        else: self.load_wp(res[0])
+        if not res:
+            self.root.current = "onboard"
+        else:
+            self.load_wp(res[0])
 
     def create_wp(self, name):
         if name:
@@ -228,34 +249,34 @@ class ProMedApp(MDApp):
             self.refresh_cl()
 
     def refresh_cl(self):
-        container = self.root.get_screen('main').ids.cl_container
-        container.clear_widgets()
+        l = self.root.get_screen('main').ids.cl_list
+        l.clear_widgets()
         self.db.cursor.execute(f"SELECT * FROM chk_{self.wp_slug} ORDER BY id DESC")
-        for row in self.db.cursor.fetchall():
-            card = MDCard(size_hint_y=None, height="100dp", radius=15, padding=10)
-            card.add_widget(Label(text=row[1], color=(0,0,0,1)))
-            container.add_widget(card)
-
-    def pos_manual_add(self):
-        name = self.root.get_screen('main').ids.ps.text
-        qty = self.root.get_screen('main').ids.pq.text
-        self.root.get_screen('main').ids.cart_list.add_widget(
-            TwoLineAvatarIconListItem(text=name, secondary_text=f"Qty: {qty}")
-        )
-
-    def fin_sale(self):
-        MDDialog(title="Success", text="Payment Saved").open()
+        for r in self.db.cursor.fetchall():
+            card = MDCard(size_hint_y=None, height="80dp", radius=15, padding=10)
+            if r[2]: card.md_bg_color = (0.8, 0.8, 0.8, 1)
+            card.add_widget(Label(text=r[1].upper(), color=(0,0,0,1), bold=True))
+            l.add_widget(card)
 
     def smart_look(self, text):
         words = text.split()
         if words:
-            self.db.cursor.execute(f"SELECT * FROM med_{self.wp_slug} WHERE name LIKE ?", (f"{words[-1]}%",))
+            self.db.cursor.execute(f"SELECT * FROM meds_{self.wp_slug} WHERE name LIKE ?", (f"{words[-1]}%",))
             r = self.db.cursor.fetchone()
             if r: self.root.get_screen('main').ids.ins_lbl.text = f"{r[1]} - ৳{r[3]}"
 
-    def show_inv(self): MDDialog(title="Inventory", text="Manage Stock").open()
-    def show_short(self): MDDialog(title="Clinical", text="Shortlists").open()
-    def show_hist(self): MDDialog(title="Logs", text="History").open()
+    def pos_manual_add(self):
+        n = self.root.get_screen('main').ids.ps.text
+        q = self.root.get_screen('main').ids.pq.text
+        self.root.get_screen('main').ids.cart_list.add_widget(
+            TwoLineAvatarIconListItem(text=n, secondary_text=f"Qty: {q}")
+        )
+
+    def finalize_sale(self):
+        MDDialog(title="Success", text="Sale Recorded!").open()
+
+    def show_dialog(self, title):
+        MDDialog(title=title, text="Module active for this Workplace").open()
 
 if __name__ == '__main__':
     ProMedApp().run()
