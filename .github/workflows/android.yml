@@ -16,11 +16,13 @@ jobs:
       - name: Build APK
         run: |
           export PATH=$PATH:~/.local/bin
-          # This command automatically accepts all Android licenses
-          yes | buildozer android debug
+          # Removed "yes |" to fix Broken Pipe. License is accepted via buildozer.spec
+          buildozer android debug
+        env:
+          ACCEPT_SDK_LICENSE: "y"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ProMed-Final-Package
+          name: ProMed-Final-App
           path: bin/*.apk
