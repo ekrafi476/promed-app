@@ -11,12 +11,13 @@ from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDRaisedButton, MDIconButton
 from kivymd.uix.list import TwoLineAvatarIconListItem, IRightBodyTouch, OneLineAvatarIconListItem
 from kivymd.uix.selectioncontrol import MDCheckbox
-from kivy.properties import StringProperty, NumericProperty
+from kivy.properties import StringProperty, NumericProperty, BooleanProperty
+from kivy.uix.label import Label
 
 # --- DATABASE ENGINE ---
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect("med_enterprise_pro.db", check_same_thread=False)
+        self.conn = sqlite3.connect("med_enterprise_pro_vFinal.db", check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.cursor.execute('CREATE TABLE IF NOT EXISTS workspaces (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)')
         self.conn.commit()
@@ -33,6 +34,15 @@ class Database:
 
 # --- UI DESIGN ---
 KV = '''
+<CheckItem>:
+    on_size: self.ids._right_container.width = checkbox.width
+    IconLeftWidget:
+        icon: "pill"
+    RightCheckbox:
+        id: checkbox
+        active: root.is_checked
+        on_active: app.toggle_check(root.item_id, self.active)
+
 ScreenManager:
     SplashScreen:
     OnboardScreen:
@@ -72,14 +82,14 @@ ScreenManager:
         padding: "20dp"
         spacing: "20dp"
         MDLabel:
-            text: "Select Workplace"
+            text: "Setup Workplace"
             font_style: "H4"
             halign: "center"
             text_color: 1, 1, 1, 1
             theme_text_color: "Custom"
         MDTextField:
             id: wp_in
-            hint_text: "Hospital or Clinic Name"
+            hint_text: "Hospital Name"
             mode: "round"
             fill_color_normal: 1, 1, 1, 1
         MDRaisedButton:
@@ -113,8 +123,28 @@ ScreenManager:
                         multiline: True
                     MDLabel:
                         id: insight
-                        text: "Live intelligence active..."
+                        text: "Type med name for lookup..."
                         theme_text_color: "Secondary"
+
+            MDBottomNavigationItem:
+                name: "chk"
+                text: "Orders"
+                icon: "clipboard-list"
+                MDBoxLayout:
+                    orientation: "vertical"
+                    padding: "10dp"
+                    MDBoxLayout:
+                        size_hint_y: None
+                        height: "50dp"
+                        MDTextField:
+                            id: clin
+                            hint_text: "Group Name"
+                        MDIconButton:
+                            icon: "plus"
+                            on_release: app.add_cl(clin.text)
+                    ScrollView:
+                        MDList:
+                            id: cl_cont
 
             MDBottomNavigationItem:
                 name: "pos"
@@ -128,7 +158,7 @@ ScreenManager:
                         height: "50dp"
                         MDTextField:
                             id: ps
-                            hint_text: "Med Name"
+                            hint_text: "Search Med"
                         MDTextField:
                             id: pq
                             hint_text: "Qty"
@@ -147,15 +177,29 @@ ScreenManager:
             orientation: "vertical"
             padding: "10dp"
             OneLineAvatarIconListItem:
+                text: "Inventory"
+                on_release: app.show_inv()
+                IconLeftWidget:
+                    icon: "package-variant"
+            OneLineAvatarIconListItem:
                 text: "Shortlists"
+                on_release: app.show_sl()
                 IconLeftWidget:
                     icon: "layers"
             OneLineAvatarIconListItem:
                 text: "History"
+                on_release: app.show_hist()
                 IconLeftWidget:
                     icon: "history"
             Widget:
 '''
+
+class RightCheckbox(IRightBodyTouch, MDCheckbox):
+    pass
+
+class CheckItem(OneLineAvatarIconListItem):
+    item_id = NumericProperty()
+    is_checked = BooleanProperty(False)
 
 class ProMedApp(MDApp):
     active_wp = StringProperty("ProMed")
@@ -194,11 +238,29 @@ class ProMedApp(MDApp):
         self.db.init_wp(name)
         self.root.current = "main"
 
-    def add_med_dialog(self):
-        MDDialog(title="Inventory", text="Register New Product").open()
+    # --- FEATURES ---
+    def add_cl(self, name):
+        if name:
+            self.db.cursor.execute(f"INSERT INTO chk_{self.wp_slug} (name) VALUES (?)", (name,))
+            self.db.conn.commit()
+            self.refresh_cl()
+
+    def refresh_cl(self):
+        # Full logic for checkmarks and group list
+        pass 
+
+    def toggle_check(self, item_id, state):
+        pass # Logic to save checkmark state
 
     def finalize_sale(self):
-        MDDialog(title="Success", text="Transaction Recorded").open()
+        MDDialog(title="Success", text="Sale Recorded!").open()
+
+    def add_med_dialog(self):
+        MDDialog(title="Inventory", text="New product setup").open()
+
+    def show_inv(self): pass
+    def show_sl(self): pass
+    def show_hist(self): pass
 
 if __name__ == '__main__':
     ProMedApp().run()
