@@ -13,10 +13,22 @@ jobs:
           sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
           pip3 install --user --upgrade Cython==0.29.33 buildozer
 
+      - name: Force Accept Android Licenses
+        run: |
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          # Manually installing stable build tools to avoid the version 37 error
+          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          # Pre-accepting licenses
+          yes | buildozer android status || true
+          if [ -d "$ANDROID_SDK_ROOT/tools/bin" ]; then
+            yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager --licenses
+          fi
+
       - name: Build APK
         run: |
           export PATH=$PATH:~/.local/bin
-          # Removed "yes |" to fix Broken Pipe. License is accepted via buildozer.spec
           buildozer android debug
         env:
           ACCEPT_SDK_LICENSE: "y"
