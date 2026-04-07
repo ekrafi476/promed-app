@@ -2,7 +2,7 @@ name: Build and Release ProMed
 on: [push]
 
 permissions:
-  contents: write  # This allows GitHub to create the release for you
+  contents: write
 
 jobs:
   build:
@@ -19,12 +19,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: bin/*.apk
-          tag_name: v1.0.${{ github.run_number }}
-          name: ProMed App Update ${{ github.run_number }}
-          body: |
-            Direct APK Download link below. 
-            No zip extraction needed.
-          draft: false
-          prerelease: false
+          tag_name: Beta_v1.0.3_build_${{ github.run_number }}
+          name: ProMed Beta v1.0.3 Build ${{ github.run_number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
